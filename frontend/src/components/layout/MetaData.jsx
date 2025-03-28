@@ -1,10 +1,10 @@
-const MetaData = ({ title }) => {
-  const pageTitle = `${title}  - ShopIT`;
+import { Helmet } from "react-helmet";
 
+const MetaData = ({ title }) => {
   return (
-    <>
-      <title>{pageTitle}</title>
-    </>
+    <Helmet>
+      <title>{`${title} - ShopIT`}</title>
+    </Helmet>
   );
 };
 
