@@ -4,6 +4,7 @@ import { useUpdateProfileMutation } from "../../redux/api/userApi";
 import { useSelector } from "react-redux";
 import toast from "react-hot-toast";
 import UserLayout from "../layout/UserLayout";
+import MetaData from "../layout/MetaData";
 
 const UpdateProfile = () => {
   const [name, setName] = useState("");
@@ -11,7 +12,7 @@ const UpdateProfile = () => {
 
   const navigate = useNavigate();
 
-  const [UpdateProfile, { isLoading, error, isSuccess }] =
+  const [updateProfile, { isLoading, error, isSuccess }] =
     useUpdateProfileMutation();
 
   const { user } = useSelector((state) => state.auth);
@@ -38,11 +39,12 @@ const UpdateProfile = () => {
       email,
     };
 
-    UpdateProfile(userData);
+    updateProfile(userData);
   };
 
   return (
     <UserLayout>
+      <MetaData title={"Update Profile"} />
       <div className="row wrapper">
         <div className="col-10 col-lg-8">
           <form className="shadow rounded bg-body" onSubmit={submitHandler}>

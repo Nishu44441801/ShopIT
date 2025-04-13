@@ -13,15 +13,16 @@ export const upload_file = (file, folder) => {
   return new Promise((resolve, reject) => {
     cloudinary.v2.uploader.upload(
       file,
-      (result) => {
-        resolve({
-          pubilc_id: result.pubilc_id,
-          url: result.url,
-        });
-      },
       {
         resource_type: "auto",
         folder,
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve({
+          public_id: result.public_id,
+          url: result.secure_url,
+        });
       }
     );
   });
