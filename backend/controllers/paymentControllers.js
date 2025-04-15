@@ -32,7 +32,7 @@ export const stripeCheckoutSession = catchAsyncErrors(
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
-      success_url: `${process.env.FRONTEND_URL}/me/orders`,
+      success_url: `${process.env.FRONTEND_URL}/me/orders?order_success=true`,
       cancel_url: `${process.env.FRONTEND_URL}`,
       customer_email: req.user?.email,
       client_reference_id: req.user?._id?.toString(),
@@ -42,7 +42,7 @@ export const stripeCheckoutSession = catchAsyncErrors(
         city: shippingInfo.city,
         country: shippingInfo.country,
         phoneNo: shippingInfo.phoneNo,
-        pinCode: shippingInfo.pinCode,
+        zipCode: shippingInfo.zipCode,
         state: shippingInfo.state,
         itemsPrice: body.itemsPrice,
       },
@@ -56,26 +56,18 @@ export const stripeCheckoutSession = catchAsyncErrors(
 
 // Helper: Fix async bug with Promise.all
 const getOrderItems = async (line_items) => {
-  return new Promise((resolve, reject) => {
-    let cartItems = [];
-
-    line_items?.data?.forEach(async (item) => {
+  return await Promise.all(
+    line_items?.data?.map(async (item) => {
       const product = await stripe.products.retrieve(item.price.product);
-      const productId = product.metadata.productId;
-
-      cartItems.push({
-        product: productId,
+      return {
+        product: product.metadata.productId,
         name: product.name,
         price: item.price.unit_amount_decimal / 100,
         quantity: item.quantity,
         image: product.images[0],
-      });
-
-      if (cartItems.length === line_items?.data?.length) {
-        resolve(cartItems);
-      }
-    });
-  });
+      };
+    })
+  );
 };
 
 // Stripe Webhook Handler
@@ -95,20 +87,15 @@ export const stripeWebhook = catchAsyncErrors(async (req, res, next) => {
       const line_items = await stripe.checkout.sessions.listLineItems(
         session.id
       );
-      const orderItems = await getOrderItems(line_items);
-      const user = session.client_reference_id;
 
-      const totalAmount = session.amount_total / 100;
-      const taxAmount = session.total_details.amount_tax / 100;
-      const shippingAmount = session.total_details.amount_shipping / 100;
-      const itemsPrice = Number(session.metadata.itemsPrice);
+      const orderItems = await getOrderItems(line_items);
 
       const shippingInfo = {
         address: session.metadata.address,
         city: session.metadata.city,
         country: session.metadata.country,
         phoneNo: session.metadata.phoneNo,
-        pinCode: session.metadata.pinCode,
+        zipCode: session.metadata.zipCode,
         state: session.metadata.state,
       };
 
@@ -120,13 +107,13 @@ export const stripeWebhook = catchAsyncErrors(async (req, res, next) => {
       const orderData = {
         shippingInfo,
         orderItems,
-        itemsPrice,
-        taxAmount,
-        shippingAmount,
-        totalAmount,
+        itemsPrice: Number(session.metadata.itemsPrice),
+        taxAmount: session.total_details.amount_tax / 100,
+        shippingAmount: session.total_details.amount_shipping / 100,
+        totalAmount: session.amount_total / 100,
         paymentInfo,
         paymentMethod: "Card",
-        user,
+        user: session.client_reference_id,
       };
 
       await Order.create(orderData);
@@ -134,10 +121,9 @@ export const stripeWebhook = catchAsyncErrors(async (req, res, next) => {
       return res.status(200).json({ success: true });
     }
 
-    // Return 200 for unhandled events too
     res.status(200).json({ received: true });
   } catch (error) {
-    console.error("Webhook Error:", error.message);
+    console.error(" Webhook Error:", error.message);
     res.status(400).send(`Webhook Error: ${error.message}`);
   }
 });
