@@ -80,14 +80,20 @@ export const updateOrder = catchAsyncErrors(async (req, res, next) => {
     return next(new ErrorHandler("You have already delivered this order", 400));
   }
 
-  order?.orderItems?.forEach(async (item) => {
+  let productNotFound = false;
+
+  for (const item of order.orderItems) {
     const product = await Product.findById(item?.product?.toString());
     if (!product) {
-      return next(new ErrorHandler("No Product found with this ID", 404));
+      productNotFound = true;
+      break;
     }
     product.stock = product.stock - item.quantity;
     await product.save({ validateBeforeSave: false });
-  });
+  }
+  if (productNotFound) {
+    return next(new ErrorHandler("No Product found with one or more IDS", 404));
+  }
 
   order.orderStatus = req.body.status;
   order.deliveredAt = Date.now();
@@ -132,6 +138,9 @@ async function getSalesData(startDate, endDate) {
         numOrders: { $sum: 1 },
       },
     },
+    {
+      $sort: { "_id.date": 1 },
+    },
   ]);
 
   const salesMap = new Map();
@@ -141,7 +150,7 @@ async function getSalesData(startDate, endDate) {
   salesData.forEach((entry) => {
     const date = entry?._id.date;
     const sales = entry?.totalSales;
-    const numOrders = entry?._id.numOrders;
+    const numOrders = entry?.numOrders;
 
     salesMap.set(date, { sales, numOrders });
     totalSales += sales;
@@ -149,19 +158,17 @@ async function getSalesData(startDate, endDate) {
   });
 
   const datesBetween = getDatesBetween(startDate, endDate);
+  const finalSalesData = datesBetween.map((date) => ({
+    date,
+    sales: (salesMap.get(date) || { sales: 0 }).sales,
+    numOrders: (salesMap.get(date) || { numOrders: 0 }).numOrders,
+  }));
 
-  console.log(datesBetween);
-}
-
-function getDatesBetween(startDate, endDate) {
-  const dates = [];
-  let currentDate = new Date(startDate);
-
-  while (currentDate <= new Date(endDate)) {
-    const formattedDate = currentDate.toISOString().split("Y")[0];
-    dates.push(formattedDate);
-    currentDate.setDate(currentDate.getDate() + 1);
-  }
+  return {
+    salesData: finalSalesData,
+    totalSales,
+    totalNumOrders,
+  };
 }
 
 export const getSales = catchAsyncErrors(async (req, res, next) => {
@@ -171,9 +178,27 @@ export const getSales = catchAsyncErrors(async (req, res, next) => {
   startDate.setUTCHours(0, 0, 0, 0);
   endDate.setUTCHours(23, 59, 59, 999);
 
-  getSalesData(startDate, endDate);
+  const { salesData, totalSales, totalNumOrders } = await getSalesData(
+    startDate,
+    endDate
+  );
 
   res.status(200).json({
-    success: true,
+    totalSales,
+    totalNumOrders,
+    sales: salesData,
   });
 });
+
+function getDatesBetween(startDate, endDate) {
+  const dates = [];
+  let currentDate = new Date(startDate);
+
+  while (currentDate <= new Date(endDate)) {
+    const formattedDate = currentDate.toISOString().split("T")[0];
+    dates.push(formattedDate);
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return dates;
+}

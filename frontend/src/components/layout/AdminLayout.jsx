@@ -18,6 +18,11 @@ const AdminLayout = ({ children }) => {
       url: "/admin/products",
       icon: "fab fa-product-hunt,",
     },
+    {
+      name: "Orders",
+      url: "/admin/orders",
+      icon: "fab fa-product-hunt,",
+    },
 
     {
       name: "Users",
